@@ -1,0 +1,42 @@
+<svg width="32" height="32" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!-- Dark background -->
+  <rect width="32" height="32" rx="6" fill="#0a0e1a"/>
+  
+  <!-- Keyboard outline with green glow -->
+  <rect x="4" y="10" width="24" height="14" rx="2" fill="#121828" stroke="#00ff88" stroke-width="1.5"/>
+  
+  <!-- Key rows -->
+  <!-- Top row -->
+  <rect x="6" y="12" width="2" height="2" rx="0.5" fill="#00ff88"/>
+  <rect x="9" y="12" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="12" y="12" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="15" y="12" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="18" y="12" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="21" y="12" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="24" y="12" width="2" height="2" rx="0.5" fill="#00ff88"/>
+  
+  <!-- Middle row -->
+  <rect x="6" y="15" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="9" y="15" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="12" y="15" width="2" height="2" rx="0.5" fill="#00ff88"/>
+  <rect x="15" y="15" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="18" y="15" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="21" y="15" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="24" y="15" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  
+  <!-- Bottom row (spacebar) -->
+  <rect x="9" y="18" width="14" height="2" rx="0.5" fill="#00ff88"/>
+  <rect x="6" y="18" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  <rect x="24" y="18" width="2" height="2" rx="0.5" fill="#8899aa"/>
+  
+  <!-- Glow effect -->
+  <defs>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="1" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+</svg>

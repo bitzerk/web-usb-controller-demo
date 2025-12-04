@@ -1,7 +1,7 @@
 {
-    "name": "VIA",
-	"short_name": "VIA",
-	"description": "VIA - Your keyboard's best friend",
+    "name": "Keyboard Web Control Demo",
+	"short_name": "Keyboard Demo",
+	"description": "Control your keyboard's backlight directly from the web",
 	"start_url": ".",
     "icons": [
         {
@@ -15,7 +15,7 @@
             "type": "image/png"
         }
     ],
-    "theme_color": "#dadada",
-    "background_color": "#dadada",
+    "theme_color": "#0a0e1a",
+    "background_color": "#0a0e1a",
     "display": "standalone"
 }
