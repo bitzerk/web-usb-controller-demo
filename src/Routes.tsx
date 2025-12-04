@@ -1,7 +1,8 @@
 import {UnconnectedGlobalMenu} from './components/menus/global';
-import {Route} from 'wouter';
+import {Route, Switch} from 'wouter';
 import PANES from './utils/pane-config';
 import {Home} from './components/Home';
+import {KeyboardDemo} from './components/KeyboardDemo';
 import {createGlobalStyle} from 'styled-components';
 import {CanvasRouter as CanvasRouter3D} from './components/three-fiber/canvas-router';
 import {CanvasRouter as CanvasRouter2D} from './components/two-string/canvas-router';
@@ -37,10 +38,19 @@ export default () => {
     <>
         <TestContext.Provider value={testContextState}>
           <GlobalStyle />
-          {hasHIDSupport && <UnconnectedGlobalMenu />}
-          <CanvasRouter />
-
-          <Home hasHIDSupport={hasHIDSupport}>{RouteComponents}</Home>
+          <Switch>
+            {/* Demo page at root route */}
+            <Route path="/">
+              <KeyboardDemo />
+            </Route>
+            
+            {/* Original VIA routes */}
+            <Route path="/via">
+              {hasHIDSupport && <UnconnectedGlobalMenu />}
+              <CanvasRouter />
+              <Home hasHIDSupport={hasHIDSupport}>{RouteComponents}</Home>
+            </Route>
+          </Switch>
         </TestContext.Provider>
     </>
   );
