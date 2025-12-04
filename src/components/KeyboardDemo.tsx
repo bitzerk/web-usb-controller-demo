@@ -5,23 +5,37 @@ import {getConnectedDevices, setForceAuthorize} from '../store/devicesSlice';
 import {KeyboardAPI} from '../utils/keyboard-api';
 import {LightingValue} from '@the-via/reader';
 import styled from 'styled-components';
+import {useSocketIO} from '../hooks/useSocketIO';
+import {useUUID} from '../hooks/useUUID';
+import {detectMode, generateRemoteURL} from '../utils/mode-detection';
+import {QRCodeDisplay} from './QRCodeDisplay';
+import {ConnectionStatus} from './ConnectionStatus';
+import type {
+  BrightnessSetEvent,
+  BrightnessSyncEvent,
+} from '../types/socket-events';
 
 const DemoContainer = styled.div`
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 100vh;
+  height: 100vh;
   background: linear-gradient(180deg, #0a0e1a 0%, #121828 50%, #0a0e1a 100%);
-  padding: 20px;
   font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen,
     Ubuntu, Cantarell, sans-serif;
-  position: relative;
-  overflow: hidden;
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
 
   &::before {
     content: '';
-    position: absolute;
+    position: fixed;
     top: 0;
     left: 0;
     right: 0;
@@ -37,6 +51,7 @@ const DemoContainer = styled.div`
         transparent 50%
       );
     pointer-events: none;
+    z-index: 0;
   }
 `;
 
@@ -47,11 +62,14 @@ const Card = styled.div`
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 1px rgba(0, 255, 136, 0.5),
     inset 0 1px 0 rgba(0, 255, 136, 0.1);
   max-width: 500px;
-  width: 100%;
+  width: calc(100% - 40px);
   border: 1px solid rgba(0, 255, 136, 0.2);
   backdrop-filter: blur(10px);
   position: relative;
   z-index: 1;
+  margin: 20px;
+  margin-top: auto;
+  margin-bottom: auto;
 `;
 
 const Title = styled.h1`
@@ -229,7 +247,42 @@ const StatusMessage = styled.div<{type: 'error' | 'info'}>`
       : '0 4px 15px rgba(0, 255, 136, 0.2)'};
 `;
 
+const ModeIndicator = styled.div<{mode: 'host' | 'remote'}>`
+  display: inline-block;
+  padding: 8px 16px;
+  margin-bottom: 20px;
+  background: ${(props) =>
+    props.mode === 'host'
+      ? 'rgba(0, 255, 136, 0.15)'
+      : 'rgba(136, 136, 255, 0.15)'};
+  border: 1px solid
+    ${(props) =>
+      props.mode === 'host'
+        ? 'rgba(0, 255, 136, 0.3)'
+        : 'rgba(136, 136, 255, 0.3)'};
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  color: ${(props) => (props.mode === 'host' ? '#00ff88' : '#8888ff')};
+  text-transform: uppercase;
+  letter-spacing: 1px;
+`;
+
 export const KeyboardDemo = () => {
+  // 1. Mode Detection
+  const {mode, remoteUUID} = detectMode();
+
+  // 2. UUID Management
+  const hostUUID = useUUID(); // Only used in host mode
+  const activeUUID = mode === 'host' ? hostUUID : remoteUUID!;
+
+  // 3. Socket.IO Connection
+  const {isConnected, emit, on, off} = useSocketIO({
+    uuid: activeUUID,
+    mode,
+  });
+
+  // 4. Existing state
   const dispatch = useAppDispatch();
   const connectedDevices = useAppSelector(getConnectedDevices);
   const [brightness, setBrightness] = useState(128);
@@ -242,6 +295,63 @@ export const KeyboardDemo = () => {
 
   const devicesList = Object.values(connectedDevices);
   const device = devicesList[0];
+
+  // 5. Socket Event Handlers - Host Mode: Listen for remote brightness changes
+  useEffect(() => {
+    if (mode === 'host' && isConnected) {
+      const handleBrightnessSet = (data: BrightnessSetEvent) => {
+        if (data.uuid === hostUUID) {
+          console.log(
+            '[Host] Received brightness:set from remote:',
+            data.brightness,
+          );
+          setBrightness(data.brightness);
+
+          // Apply to physical keyboard if connected
+          if (keyboardAPI && brightnessType) {
+            const lightingValue =
+              brightnessType === 'backlight'
+                ? LightingValue.BACKLIGHT_BRIGHTNESS
+                : LightingValue.QMK_RGBLIGHT_BRIGHTNESS;
+
+            keyboardAPI
+              .setBacklightValue(lightingValue, data.brightness)
+              .then(() => {
+                console.log('[Host] Applied remote brightness to keyboard');
+              })
+              .catch((err) => {
+                console.error('[Host] Failed to apply brightness:', err);
+              });
+          }
+        }
+      };
+
+      on('brightness:set', handleBrightnessSet);
+
+      return () => {
+        off('brightness:set', handleBrightnessSet);
+      };
+    }
+  }, [mode, isConnected, hostUUID, keyboardAPI, brightnessType, on, off]);
+
+  // Remote Mode: Listen for host brightness sync
+  useEffect(() => {
+    if (mode === 'remote' && isConnected) {
+      const handleBrightnessSync = (data: BrightnessSyncEvent) => {
+        if (data.uuid === remoteUUID) {
+          console.log('[Remote] Received brightness:sync from host:', data);
+          setBrightness(data.brightness);
+          setBrightnessType(data.brightnessType);
+        }
+      };
+
+      on('brightness:sync', handleBrightnessSync);
+
+      return () => {
+        off('brightness:sync', handleBrightnessSync);
+      };
+    }
+  }, [mode, isConnected, remoteUUID, on, off]);
 
   useEffect(() => {
     // Initialize store and load supported IDs
@@ -322,45 +432,76 @@ export const KeyboardDemo = () => {
     const newBrightness = parseInt(e.target.value);
     setBrightness(newBrightness);
 
-    if (keyboardAPI) {
-      try {
-        // Use the brightness type we detected during initialization
-        const lightingValue =
-          brightnessType === 'backlight'
-            ? LightingValue.BACKLIGHT_BRIGHTNESS
-            : LightingValue.QMK_RGBLIGHT_BRIGHTNESS;
-
-        console.log(
-          `💡 Setting ${brightnessType} brightness to:`,
-          newBrightness,
-          `(value: ${lightingValue})`,
-        );
-
-        await keyboardAPI.setBacklightValue(lightingValue, newBrightness);
-        console.log('✅ Brightness set successfully');
-        setError(null);
-      } catch (err) {
-        console.error('❌ Failed to set brightness:', err);
-        // Try the other type as fallback
+    if (mode === 'host') {
+      // Host Mode: Apply to keyboard and emit sync
+      if (keyboardAPI) {
         try {
-          const fallbackValue =
+          // Use the brightness type we detected during initialization
+          const lightingValue =
             brightnessType === 'backlight'
-              ? LightingValue.QMK_RGBLIGHT_BRIGHTNESS
-              : LightingValue.BACKLIGHT_BRIGHTNESS;
+              ? LightingValue.BACKLIGHT_BRIGHTNESS
+              : LightingValue.QMK_RGBLIGHT_BRIGHTNESS;
 
-          console.log('⚠️ Trying fallback brightness type:', fallbackValue);
-          await keyboardAPI.setBacklightValue(fallbackValue, newBrightness);
-          setBrightnessType(
-            brightnessType === 'backlight' ? 'qmk_rgblight' : 'backlight',
+          console.log(
+            `💡 Setting ${brightnessType} brightness to:`,
+            newBrightness,
+            `(value: ${lightingValue})`,
           );
-          console.log('✅ Fallback brightness set successfully');
+
+          await keyboardAPI.setBacklightValue(lightingValue, newBrightness);
+          console.log('✅ Brightness set successfully');
           setError(null);
-        } catch (err2) {
-          console.error('❌ Both brightness types failed:', err2);
-          setError(
-            'Failed to set brightness. Please try reconnecting your keyboard.',
-          );
+
+          // Emit sync to remotes
+          if (isConnected) {
+            emit('brightness:sync', {
+              uuid: hostUUID,
+              brightness: newBrightness,
+              brightnessType: brightnessType!,
+            });
+          }
+        } catch (err) {
+          console.error('❌ Failed to set brightness:', err);
+          // Try the other type as fallback
+          try {
+            const fallbackValue =
+              brightnessType === 'backlight'
+                ? LightingValue.QMK_RGBLIGHT_BRIGHTNESS
+                : LightingValue.BACKLIGHT_BRIGHTNESS;
+
+            console.log('⚠️ Trying fallback brightness type:', fallbackValue);
+            await keyboardAPI.setBacklightValue(fallbackValue, newBrightness);
+            setBrightnessType(
+              brightnessType === 'backlight' ? 'qmk_rgblight' : 'backlight',
+            );
+            console.log('✅ Fallback brightness set successfully');
+            setError(null);
+
+            // Emit sync with updated brightness type
+            if (isConnected) {
+              emit('brightness:sync', {
+                uuid: hostUUID,
+                brightness: newBrightness,
+                brightnessType:
+                  brightnessType === 'backlight' ? 'qmk_rgblight' : 'backlight',
+              });
+            }
+          } catch (err2) {
+            console.error('❌ Both brightness types failed:', err2);
+            setError(
+              'Failed to set brightness. Please try reconnecting your keyboard.',
+            );
+          }
         }
+      }
+    } else {
+      // Remote Mode: Emit set command to host
+      if (isConnected) {
+        emit('brightness:set', {
+          uuid: remoteUUID!,
+          brightness: newBrightness,
+        });
+        console.log('[Remote] Emitted brightness:set');
       }
     }
   };
@@ -369,52 +510,98 @@ export const KeyboardDemo = () => {
 
   return (
     <DemoContainer>
-      <Card>
-        <Title>USB Keyboard Control Demo</Title>
-        <Subtitle>
-          Control your keyboard's backlight directly from the web
-        </Subtitle>
+      <ConnectionStatus isConnected={isConnected} />
 
-        {!device ? (
+      <Card>
+        <ModeIndicator mode={mode}>
+          {mode === 'host' ? '🖥️ Host Mode' : '📱 Remote Control Mode'}
+        </ModeIndicator>
+
+        {mode === 'host' ? (
+          // HOST MODE UI
           <>
-            <Button onClick={handleAuthorize} disabled={isAuthorizing}>
-              {isAuthorizing ? 'Authorizing...' : 'Authorize Keyboard'}
-            </Button>
-            <StatusMessage type="info">
-              Click the button above to connect your compatible keyboard
-            </StatusMessage>
+            {!device ? (
+              <>
+                <Title>USB Keyboard Control Demo</Title>
+                <Subtitle>
+                  {mode === 'host'
+                    ? "Control your keyboard's backlight directly from the web"
+                    : 'Controlling keyboard remotely'}
+                </Subtitle>
+                <Button onClick={handleAuthorize} disabled={isAuthorizing}>
+                  {isAuthorizing ? 'Authorizing...' : 'Authorize Keyboard'}
+                </Button>
+                <StatusMessage type="info">
+                  Click the button above to connect your compatible keyboard
+                </StatusMessage>
+              </>
+            ) : (
+              <>
+                {/* QR Code Display */}
+                <QRCodeDisplay url={generateRemoteURL(hostUUID)} />
+
+                <DeviceInfo>
+                  <DeviceName>
+                    {device.productName || 'Connected Keyboard'}
+                  </DeviceName>
+                  <DeviceDetails>
+                    VID: 0x
+                    {device.vendorId
+                      .toString(16)
+                      .padStart(4, '0')
+                      .toUpperCase()}{' '}
+                    | PID: 0x
+                    {device.productId
+                      .toString(16)
+                      .padStart(4, '0')
+                      .toUpperCase()}
+                  </DeviceDetails>
+                  <DeviceDetails>
+                    Protocol: v{device.protocol} |{' '}
+                    {device.requiredDefinitionVersion.toUpperCase()}
+                  </DeviceDetails>
+                  {brightnessType && (
+                    <DeviceDetails
+                      style={{
+                        marginTop: '5px',
+                        color: '#00ff88',
+                        textShadow: '0 0 10px rgba(0, 255, 136, 0.5)',
+                      }}
+                    >
+                      ✓ Using{' '}
+                      {brightnessType === 'qmk_rgblight'
+                        ? 'QMK RGB Light'
+                        : 'Standard Backlight'}
+                    </DeviceDetails>
+                  )}
+                </DeviceInfo>
+
+                <SliderContainer>
+                  <SliderLabel>
+                    <LabelText>Backlight Brightness</LabelText>
+                    <BrightnessValue>{brightnessPercentage}%</BrightnessValue>
+                  </SliderLabel>
+                  <Slider
+                    type="range"
+                    min="0"
+                    max="255"
+                    value={brightness}
+                    onChange={handleBrightnessChange}
+                  />
+                </SliderContainer>
+
+                <Button onClick={handleAuthorize} style={{marginTop: '20px'}}>
+                  Connect Different Keyboard
+                </Button>
+              </>
+            )}
           </>
         ) : (
+          // REMOTE MODE UI
           <>
-            <DeviceInfo>
-              <DeviceName>
-                {device.productName || 'Connected Keyboard'}
-              </DeviceName>
-              <DeviceDetails>
-                VID: 0x
-                {device.vendorId.toString(16).padStart(4, '0').toUpperCase()} |
-                PID: 0x
-                {device.productId.toString(16).padStart(4, '0').toUpperCase()}
-              </DeviceDetails>
-              <DeviceDetails>
-                Protocol: v{device.protocol} |{' '}
-                {device.requiredDefinitionVersion.toUpperCase()}
-              </DeviceDetails>
-              {brightnessType && (
-                <DeviceDetails
-                  style={{
-                    marginTop: '5px',
-                    color: '#00ff88',
-                    textShadow: '0 0 10px rgba(0, 255, 136, 0.5)',
-                  }}
-                >
-                  ✓ Using{' '}
-                  {brightnessType === 'qmk_rgblight'
-                    ? 'QMK RGB Light'
-                    : 'Standard Backlight'}
-                </DeviceDetails>
-              )}
-            </DeviceInfo>
+            <StatusMessage type="info">
+              Connected to host keyboard remotely
+            </StatusMessage>
 
             <SliderContainer>
               <SliderLabel>
@@ -430,9 +617,11 @@ export const KeyboardDemo = () => {
               />
             </SliderContainer>
 
-            <Button onClick={handleAuthorize} style={{marginTop: '20px'}}>
-              Connect Different Keyboard
-            </Button>
+            {!isConnected && (
+              <StatusMessage type="error">
+                Unable to connect to server. Please check your connection.
+              </StatusMessage>
+            )}
           </>
         )}
 
