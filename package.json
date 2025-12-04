@@ -1,7 +1,10 @@
 {
   "license": "GPL-3.0",
   "scripts": {
-    "dev": "node scripts/build-definitions.js && vite --force",
+    "dev": "concurrently \"bun run server\" \"bun run dev:client\"",
+    "dev:client": "node scripts/build-definitions.js && vite --force",
+    "server": "node server.js",
+    "network-info": "bash show-network-info.sh",
     "build": "bun run build:kbs && tsc && vite build",
     "format": "prettier --write \"src/**/*.{js,jsx,ts,tsx}\"",
     "lint": "prettier --check \"src/**/*.{js,jsx,ts,tsx}\"",
@@ -32,6 +35,7 @@
     "@the-via/pelpi": "^0.0.3",
     "@the-via/reader": "^1.9.0",
     "@webscopeio/react-textarea-autocomplete": "^4.9.2",
+    "cors": "^2.8.5",
     "downshift": "^7.2.1",
     "idb-keyval": "^6.2.0",
     "json-stringify-pretty-compact": "^4.0.0",
@@ -45,6 +49,7 @@
     "react-select": "^5.8.1",
     "react-textarea-autosize": "^8.4.0",
     "redux-logger": "^3.0.6",
+    "socket.io": "^4.8.1",
     "socket.io-client": "^4.8.1",
     "styled-components": "^6.0.0-beta.5",
     "three": "^0.169.0",

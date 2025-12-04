@@ -105,7 +105,7 @@ export function useSocketIO({ uuid, mode }: UseSocketIOOptions): UseSocketIORetu
     ) => {
       if (socket && isConnected) {
         socket.emit(event, data);
-        console.log(`[Socket.IO] Emitted ${event}:`, data);
+        // console.log(`[Socket.IO] Emitted ${event}:`, data);
       } else {
         console.warn(`[Socket.IO] Cannot emit ${event}: not connected`);
       }

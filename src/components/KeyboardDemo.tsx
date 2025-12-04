@@ -301,10 +301,10 @@ export const KeyboardDemo = () => {
     if (mode === 'host' && isConnected) {
       const handleBrightnessSet = (data: BrightnessSetEvent) => {
         if (data.uuid === hostUUID) {
-          console.log(
-            '[Host] Received brightness:set from remote:',
-            data.brightness,
-          );
+          // console.log(
+          //   '[Host] Received brightness:set from remote:',
+          //   data.brightness,
+          // );
           setBrightness(data.brightness);
 
           // Apply to physical keyboard if connected
@@ -317,7 +317,7 @@ export const KeyboardDemo = () => {
             keyboardAPI
               .setBacklightValue(lightingValue, data.brightness)
               .then(() => {
-                console.log('[Host] Applied remote brightness to keyboard');
+                // console.log('[Host] Applied remote brightness to keyboard');
               })
               .catch((err) => {
                 console.error('[Host] Failed to apply brightness:', err);
@@ -339,7 +339,7 @@ export const KeyboardDemo = () => {
     if (mode === 'remote' && isConnected) {
       const handleBrightnessSync = (data: BrightnessSyncEvent) => {
         if (data.uuid === remoteUUID) {
-          console.log('[Remote] Received brightness:sync from host:', data);
+          // console.log('[Remote] Received brightness:sync from host:', data);
           setBrightness(data.brightness);
           setBrightnessType(data.brightnessType);
         }
@@ -501,7 +501,7 @@ export const KeyboardDemo = () => {
           uuid: remoteUUID!,
           brightness: newBrightness,
         });
-        console.log('[Remote] Emitted brightness:set');
+        // console.log('[Remote] Emitted brightness:set');
       }
     }
   };
